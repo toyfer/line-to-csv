@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LINEトーク → CSV変換</title>
+<style>
+:root {
+  --bg: #f5f6f8;
+  --card: #fff;
+  --text: #1a1a2e;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --accent: #06c755;
+  --accent-hover: #05a84a;
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', Meiryo, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  justify-content: center;
+  padding: 40px 16px 80px;
+  min-height: 100vh;
+}
+.container { max-width: 880px; width: 100%; }
+
+header { text-align: center; margin-bottom: 32px; }
+header h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -.02em; }
+header p { color: var(--muted); font-size: .9rem; margin-top: 6px; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 28px 32px;
+  margin-bottom: 24px;
+}
+.card h2 { font-size: 1.05rem; font-weight: 700; margin-bottom: 6px; }
+.card .sub { color: var(--muted); font-size: .82rem; margin-bottom: 18px; }
+
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: .15s;
+  color: var(--muted);
+  font-size: .9rem;
+}
+.dropzone:hover, .dropzone.dragover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #f0fdf4;
+}
+.dropzone .icon { font-size: 2rem; margin-bottom: 8px; }
+.dropzone input { display: none; }
+
+.divider {
+  text-align: center;
+  color: var(--muted);
+  font-size: .8rem;
+  margin: 20px 0;
+  position: relative;
+}
+.divider::before, .divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 40%;
+  height: 1px;
+  background: var(--border);
+}
+.divider::before { left: 0; }
+.divider::after { right: 0; }
+
+textarea {
+  width: 100%;
+  min-height: 300px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  font-size: .82rem;
+  line-height: 1.6;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  resize: vertical;
+  background: #fafbfc;
+}
+textarea:focus { outline: none; border-color: var(--accent); }
+
+.stats { display: flex; gap: 14px; margin-top: 18px; flex-wrap: wrap; }
+.stat {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 12px 18px;
+  min-width: 100px;
+}
+.stat .num { font-size: 1.25rem; font-weight: 700; }
+.stat .label { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+
+.btn-row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.btn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: .88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: .15s;
+  font-family: inherit;
+}
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent-hover); }
+.btn.outline { background: #fff; border: 1px solid var(--border); color: var(--text); }
+.btn.outline:hover { background: var(--bg); }
+
+.preview-wrap {
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-top: 16px;
+}
+table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); }
+th {
+  font-weight: 700;
+  font-size: .72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  position: sticky;
+  top: 0;
+  background: var(--card);
+  z-index: 1;
+}
+.type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: .68rem;
+  font-weight: 600;
+}
+.type-text { background: #e0e7ff; color: #3730a3; }
+.type-photo { background: #fef3c7; color: #92400e; }
+.type-stamp { background: #fce7f3; color: #9d174d; }
+.type-album { background: #f3e8ff; color: #6b21a8; }
+.type-call { background: #dcfce7; color: #166534; }
+.type-system { background: #f1f5f9; color: #475569; }
+.type-url { background: #dbeafe; color: #1e40af; }
+.type-paypay { background: #ffedd5; color: #9a3412; }
+.type-video { background: #fee2e2; color: #991b1b; }
+.type-file { background: #e0f2fe; color: #075985; }
+.type-voice { background: #f0fdf4; color: #15803d; }
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a2e;
+  color: #fff;
+  padding: 10px 24px;
+  border-radius: 999px;
+  font-size: .85rem;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity .25s;
+  pointer-events: none;
+  z-index: 999;
+}
+.toast.show { opacity: 1; }
+.hidden { display: none; }
+
+footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: .78rem;
+  margin-top: 16px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>📋 LINEトーク → CSV変換</h1>
+    <p>.txt ファイルを投げるか、テキストを貼り付けるだけでCSVに変換</p>
+  </header>
+
+  <div class="card">
+    <h2>ファイルをドロップ</h2>
+    <p class="sub">.txt ファイルをドラッグ＆ドロップ または クリックして選択</p>
+    <div class="dropzone" id="dropzone">
+      <div class="icon">📥</div>
+      <div>ここに .txt をドロップ または クリックして選択</div>
+      <input type="file" id="fileInput" accept=".txt,text/plain">
+    </div>
+
+    <div class="divider">または テキストを貼り付け</div>
+
+    <textarea id="textInput" placeholder="R6/04/02(火)&#10;&#10;07:31&#9;すずか&#9;おはよう&#10;07:36&#9;十生&#9;おはよう"></textarea>
+  </div>
+
+  <div class="card hidden" id="resultCard">
+    <h2>解析結果</h2>
+    <p class="sub" id="resultSub"></p>
+    <div class="stats" id="statsRow"></div>
+    <div class="preview-wrap" id="previewWrap"></div>
+    <div class="btn-row">
+      <button class="btn primary" id="btnDownload">⬇ CSV をダウンロード</button>
+      <button class="btn outline" id="btnCopy">📋 クリップボードにコピー</button>
+    </div>
+  </div>
+
+  <footer>出力列: date, weekday, time, sender, message_type, message</footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+/* ============================================================
+ * Constants
+ * ============================================================ */
+
+const ERA_OFFSET = {
+  R: 2018,
+  H: 1988,
+  S: 1925,
+  T: 1911,
+  M: 1867,
+};
+
+const DATE_RE = /^([A-Z])(\d{1,2})\/(\d{1,2})\/(\d{1,2})\((.+?)\)\s*$/;
+const MSG_RE = /^(\d{1,2}:\d{2})\t(.+?)\t(.+)$/;
+const SYS_RE = /^(\d{1,2}:\d{2})\t\t(.+)$/;
+
+/* ============================================================
+ * Parser
+ * ============================================================ */
+
+const Parser = {
+
+  parseDateHeader(line) {
+    const m = line.match(DATE_RE);
+    if (!m) return null;
+    const era = m[1];
+    if (ERA_OFFSET[era] === undefined) return null;
+    const year = ERA_OFFSET[era] + parseInt(m[2], 10);
+    const month = m[3].padStart(2, "0");
+    const day = m[4].padStart(2, "0");
+    return { date: `${year}-${month}-${day}`, weekday: m[5] };
+  },
+
+  detectMessageType(message) {
+    if (/^\[写真\]/.test(message)) return "photo";
+    if (/^\[スタンプ\]/.test(message)) return "stamp";
+    if (/^\[アルバム\]/.test(message)) return "album";
+    if (/^\[動画\]/.test(message)) return "video";
+    if (/^\[ファイル\]/.test(message)) return "file";
+    if (/^\[音声メッセージ\]/.test(message)) return "voice";
+    if (/^☎\s*通話時間/.test(message)) return "call";
+    if (/^\[PayPay\]/.test(message)) return "paypay";
+    if (/^https?:\/\//.test(message)) return "url";
+    return "text";
+  },
+
+  stripOuterQuotes(message) {
+    if (message.startsWith('"') && message.endsWith('"') && message.length >= 2) {
+      return message.slice(1, -1);
+    }
+    return message;
+  },
+
+  parse(rawText) {
+    const lines = rawText.split(/\r?\n/);
+    const messages = [];
+    let currentDate = null;
+    let currentWeekday = "";
+    let inQuoted = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      const dh = this.parseDateHeader(line);
+      if (dh) {
+        currentDate = dh.date;
+        currentWeekday = dh.weekday;
+        inQuoted = false;
+        continue;
+      }
+
+      if (line.trim() === "") {
+        if (inQuoted && messages.length > 0) {
+          messages[messages.length - 1].message += "\n";
+        }
+        continue;
+      }
+
+      if (!currentDate) continue;
+
+      const sysMatch = line.match(SYS_RE);
+      if (sysMatch) {
+        inQuoted = false;
+        messages.push({
+          date: currentDate,
+          weekday: currentWeekday,
+          time: sysMatch[1],
+          sender: "",
+          message_type: "system",
+          message: sysMatch[2],
+        });
+        continue;
+      }
+
+      const msgMatch = line.match(MSG_RE);
+      if (msgMatch) {
+        const raw = msgMatch[3];
+        inQuoted = raw.startsWith('"') &&
+          !(raw.endsWith('"') && raw.length >= 2);
+        messages.push({
+          date: currentDate,
+          weekday: currentWeekday,
+          time: msgMatch[1],
+          sender: msgMatch[2],
+          message_type: "text",
+          message: raw,
+        });
+        continue;
+      }
+
+      if (messages.length > 0) {
+        const last = messages[messages.length - 1];
+        last.message += "\n" + line;
+        if (inQuoted && line.endsWith('"')) {
+          inQuoted = false;
+        }
+      }
+    }
+
+    for (const m of messages) {
+      m.message = this.stripOuterQuotes(m.message);
+      m.message = m.message.replace(/\n+$/, "");
+      if (m.message_type !== "system") {
+        m.message_type = this.detectMessageType(m.message);
+      }
+    }
+
+    return messages;
+  },
+};
+
+/* ============================================================
+ * CSV Serializer (RFC 4180)
+ * ============================================================ */
+
+const CSVSerializer = {
+  escape(value) {
+    if (value == null) return "";
+    const s = String(value);
+    if (s.includes('"') || s.includes(",") || s.includes("\n") || s.includes("\r")) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  },
+
+  serialize(messages) {
+    const header = "date,weekday,time,sender,message_type,message";
+    const rows = messages.map((m) =>
+      [
+        this.escape(m.date),
+        this.escape(m.weekday),
+        this.escape(m.time),
+        this.escape(m.sender),
+        this.escape(m.message_type),
+        this.escape(m.message),
+      ].join(",")
+    );
+    return [header, ...rows].join("\n");
+  },
+};
+
+/* ============================================================
+ * UI Controller
+ * ============================================================ */
+
+const UI = {
+  lastCSV: "",
+
+  toast(msg) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), 2200);
+  },
+
+  escHtml(s) {
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  },
+
+  init() {
+    const dropzone = document.getElementById("dropzone");
+    const fileInput = document.getElementById("fileInput");
+    const textInput = document.getElementById("textInput");
+
+    dropzone.addEventListener("click", () => fileInput.click());
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("dragover");
+    });
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("dragover");
+      const file = e.dataTransfer.files[0];
+      if (file) this.handleFile(file);
+    });
+
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files[0];
+      if (file) this.handleFile(file);
+    });
+
+    textInput.addEventListener("input", () => {
+      const val = textInput.value.trim();
+      if (val.length > 20) this.handleText(val);
+    });
+
+    document.getElementById("btnDownload").addEventListener("click", () => {
+      if (!this.lastCSV) return;
+      const blob = new Blob(["\uFEFF" + this.lastCSV], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "line_talk.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+      this.toast("CSV をダウンロードしました");
+    });
+
+    document.getElementById("btnCopy").addEventListener("click", async () => {
+      if (!this.lastCSV) return;
+      try {
+        await navigator.clipboard.writeText(this.lastCSV);
+        this.toast("クリップボードにコピーしました");
+      } catch {
+        this.toast("コピーに失敗しました");
+      }
+    });
+  },
+
+  async handleFile(file) {
+    const text = await file.text();
+    document.getElementById("textInput").value = text;
+    this.handleText(text);
+    this.toast(`${file.name} を読み込みました`);
+  },
+
+  handleText(text) {
+    const messages = Parser.parse(text);
+    this.lastCSV = CSVSerializer.serialize(messages);
+    this.renderResults(messages);
+  },
+
+  renderResults(messages) {
+    const resultCard = document.getElementById("resultCard");
+    const resultSub = document.getElementById("resultSub");
+    const statsRow = document.getElementById("statsRow");
+    const previewWrap = document.getElementById("previewWrap");
+
+    resultCard.classList.remove("hidden");
+    resultSub.textContent = `${messages.length.toLocaleString()} 件のメッセージを検出`;
+
+    const senders = new Map();
+    const typeCounts = new Map();
+    let dateMin = "";
+    let dateMax = "";
+
+    for (const m of messages) {
+      const key = m.sender || "(system)";
+      senders.set(key, (senders.get(key) || 0) + 1);
+      typeCounts.set(m.message_type, (typeCounts.get(m.message_type) || 0) + 1);
+      if (!dateMin || m.date < dateMin) dateMin = m.date;
+      if (!dateMax || m.date > dateMax) dateMax = m.date;
+    }
+
+    let statsHTML = `<div class="stat"><div class="num">${messages.length.toLocaleString()}</div><div class="label">総メッセージ</div></div>`;
+    statsHTML += `<div class="stat"><div class="num">${dateMin} 〜 ${dateMax}</div><div class="label">期間</div></div>`;
+    for (const [sender, count] of [...senders.entries()].sort((a, b) => b[1] - a[1])) {
+      statsHTML += `<div class="stat"><div class="num">${count.toLocaleString()}</div><div class="label">${this.escHtml(sender)}</div></div>`;
+    }
+    for (const [type, count] of [...typeCounts.entries()].sort((a, b) => b[1] - a[1])) {
+      statsHTML += `<div class="stat"><div class="num">${count.toLocaleString()}</div><div class="label">${type}</div></div>`;
+    }
+    statsRow.innerHTML = statsHTML;
+
+    const preview = messages.slice(-80);
+    let tableHTML = '<table><thead><tr><th>日付</th><th>曜日</th><th>時刻</th><th>送信者</th><th>種別</th><th>メッセージ</th></tr></thead><tbody>';
+    for (const m of preview) {
+      const trimmed = m.message.length > 60 ? m.message.slice(0, 60) + "…" : m.message;
+      tableHTML += `<tr><td>${m.date}</td><td>${this.escHtml(m.weekday)}</td><td>${m.time}</td><td>${this.escHtml(m.sender || "(system)")}</td><td><span class="type-badge type-${m.message_type}">${m.message_type}</span></td><td>${this.escHtml(trimmed)}</td></tr>`;
+    }
+    tableHTML += "</tbody></table>";
+    previewWrap.innerHTML = tableHTML;
+  },
+};
+
+UI.init();
+</script>
+</body>
+</html>
